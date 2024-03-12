@@ -1,9 +1,10 @@
 -- Databricks notebook source
 -- MAGIC %py
 -- MAGIC dbutils.widgets.removeAll()
--- MAGIC dbutils.widgets.text("p12m_first_date", "")
--- MAGIC dbutils.widgets.text("first_date", "")
--- MAGIC dbutils.widgets.text("last_date", "")
+-- MAGIC dbutils.widgets.text("start_date", "")
+-- MAGIC dbutils.widgets.text("end_date", "")
+-- MAGIC dbutils.widgets.text("base_dir", "")
+-- MAGIC
 
 -- COMMAND ----------
 
@@ -81,7 +82,7 @@ SELECT
 FROM
     data0
 WHERE
-    shop_brand IN ('BA', 'BP');
+    shop_brand IN ('BA');
 
 -- COMMAND ----------
 
@@ -143,7 +144,7 @@ SELECT
    *
 FROM
   raw_sales0
-where order_date >= TO_DATE(getArgument("first_date"), "yyyyMMdd") AND order_date <= TO_DATE(getArgument("last_date"), "yyyyMMdd")
+where order_date >= getArgument("start_date") AND order_date <= getArgument("end_date")
 
 -- COMMAND ----------
 
@@ -422,6 +423,7 @@ SELECT
     retail_price_hk,
     retail_price_tw,
     item_product_line_desc,
+    maincat_desc,
     item_subcat_desc,
     b.shop_desc
 FROM
@@ -468,7 +470,7 @@ WHERE
     AND item_cat NOT IN ("BA13", "BA12", "BA11")
     AND sales_staff_flag = 0
     AND cashier_id = "BAEXC"
-    AND region_key IN ('HK', 'MO')
+    AND region_key IN ('HK')
     AND sold_qty != 0
     AND valid_tx_flag = 1
     AND isnull(void_flag) = 1
@@ -487,7 +489,7 @@ WHERE
     shop_brand = "BA"
     AND retail_price_hk > 20
     AND sold_qty != 0
-    AND region_key IN ("HK", "MO")
+    AND region_key IN ("HK")
     AND item_cat NOT IN ("BA13", "BA12", "BA11")
     AND sales_staff_flag = 0
     AND shop_code = "BAEHKG02"
@@ -503,71 +505,7 @@ OR REPLACE TEMPORARY VIEW ba AS
 SELECT * FROM ba_hk_bs
 UNION
 SELECT * FROM ba_hk_os
-
--- COMMAND ----------
-
--- BP HK
-CREATE
-OR REPLACE TEMPORARY VIEW bp_hk AS
-SELECT
-    DISTINCT a.*
-FROM
-    data5 a
-WHERE
-    shop_brand = "BP"
-    AND retail_price_hk > 50
-    AND sold_qty != 0
-    AND net_amt != 0
-    AND region_key IN ("HK", "MO")
-    AND (
-        cashier_id = "CASHIER"
-        OR cashier_id = '30241'
-    )
-    AND item_cat NOT IN (
-        "BP10",
-        "BP11",
-        "BP12",
-        "BP13",
-        "BP14",
-        "BP15",
-        "BP88",
-        "BP99",
-        "ZZ",
-        "ZZZ"
-    )
-    AND sale_lady_id NOT IN ("sxd", "BP888")
-    AND valid_tx_flag = 1
-    AND isnull(void_flag) = 1
-
--- COMMAND ----------
-
--- BP TW
-CREATE
-OR REPLACE TEMPORARY VIEW bp_tw AS
-SELECT
-    a.*
-FROM
-    data5 a
-WHERE
-    shop_brand = "BP"
-    AND retail_price_hk > 0
-    AND region_key = "TW"
-    AND cashier_id = "CASHIER" -- and cashier_desc = "Standard Cashier"
-    AND item_cat NOT IN ("BP10", "BP11", "BP15", "BP88", "BP99", "ZZ", "ZZZ")
-    AND sales_staff_flag = 0
-    AND sale_lady_id NOT IN ("sxd")
-    AND sold_qty != 0
-    AND valid_tx_flag = 1
-    AND isnull(void_flag) = 1
-
--- COMMAND ----------
-
-CREATE
-OR REPLACE TEMPORARY VIEW bp AS
-SELECT * FROM bp_hk
-UNION
-SELECT * FROM bp_tw
-where net_amt_hkd > 0
+WHERE sales_staff_flag = 0
 
 -- COMMAND ----------
 
@@ -589,6 +527,7 @@ FROM
     imx_prd.imx_dw_train_silver.dbo_viw_lc_sales_vip_masked
 WHERE
     isnull(VIP_MAIN_NO) = 0
+    -- AND VIP_STAFF_FLAG = 0
 )
 SELECT  
   VIP_MAIN_NO,
@@ -601,40 +540,6 @@ SELECT
   VIP_STAFF_FLAG,
   VIP_BA_FIRST_PUR_DATE,
   VIP_BA_VIP_TYPE
-FROM cleaned_sales_vip
-
--- COMMAND ----------
-
-CREATE
-OR REPLACE TEMPORARY VIEW ApivitaSalesVip AS
-WITH cleaned_sales_vip AS (
-SELECT 
-    DISTINCT VIP_MAIN_NO,
-    VIP_TYPE,
-    VIP_ISSUE_DATE,
-    VIP_SEX,
-    VIP_NATION,
-    VIP_AGEGRP,
-    REGION_KEY,
-    VIP_STAFF_FLAG,
-    VIP_BP_FIRST_PUR_DATE,
-    VIP_BP_VIP_TYPE
-FROM
-    imx_prd.imx_dw_train_silver.dbo_viw_lc_sales_vip_masked
-WHERE
-    isnull(VIP_MAIN_NO) = 0
-)
-SELECT  
-  VIP_MAIN_NO,
-  VIP_TYPE,
-  VIP_ISSUE_DATE,
-  VIP_SEX,
-  VIP_NATION,
-  VIP_AGEGRP,
-  REGION_KEY,
-  VIP_STAFF_FLAG,
-  VIP_BP_FIRST_PUR_DATE,
-  VIP_BP_VIP_TYPE
 FROM cleaned_sales_vip
 
 -- COMMAND ----------
@@ -671,44 +576,11 @@ GROUP BY
 
 -- COMMAND ----------
 
-CREATE
-OR REPLACE TEMPORARY VIEW ApivitaFirstLastPurchase AS
-SELECT 
-    DISTINCT a.VIP_MAIN_NO,
-    first_pur_bp AS first_transaction_date,
-    MAX(a.order_date) AS last_transaction_date
-FROM
-    bp a
-LEFT JOIN (
-    SELECT DISTINCT vip_main_no, first_pur_bp FROM imx_prd.dashboard_crm_gold.first_pur_one_time_run
-) USING (VIP_MAIN_NO)
-GROUP BY
-    a.VIP_MAIN_NO,
-    first_pur_bp
-
--- COMMAND ----------
-
 -- MAGIC %py
 -- MAGIC # save
 -- MAGIC import os
--- MAGIC
--- MAGIC base_dir = "/mnt/dev/customer_segmentation/imx/aveda/datamart"
--- MAGIC os.makedirs(base_dir, exist_ok=True)
--- MAGIC prefix = "_last_year"
--- MAGIC spark.table("ba").write.parquet(os.path.join(base_dir, f"transaction{prefix}.parquet"), mode="overwrite")
--- MAGIC spark.table("AvedaSalesVip").write.parquet(os.path.join(base_dir, f"demographic{prefix}.parquet"), mode="overwrite")
--- MAGIC spark.table("AvedaFirstLastPurchase").write.parquet(os.path.join(base_dir, f"first_last_transaction{prefix}.parquet"), mode="overwrite")
-
--- COMMAND ----------
-
--- MAGIC %py
--- MAGIC base_dir = "/mnt/dev/customer_segmentation/imx/apivita/datamart"
--- MAGIC os.makedirs(base_dir, exist_ok=True)
--- MAGIC
--- MAGIC spark.table("bp").write.parquet(os.path.join(base_dir, f"transaction{prefix}.parquet"), mode="overwrite")
--- MAGIC spark.table("ApivitaSalesVip").write.parquet(os.path.join(base_dir, f"demographic{prefix}.parquet"), mode="overwrite")
--- MAGIC spark.table("ApivitaFirstLastPurchase").write.parquet(os.path.join(base_dir, f"first_last_transaction{prefix}.parquet"), mode="overwrite")
-
--- COMMAND ----------
-
-
+-- MAGIC datamart_dir = os.path.join(dbutils.widgets.get("base_dir"), "datamart")
+-- MAGIC os.makedirs(datamart_dir, exist_ok=True)
+-- MAGIC spark.table("ba").write.parquet(os.path.join(datamart_dir, f"transaction.parquet"), mode="overwrite")
+-- MAGIC spark.table("AvedaSalesVip").write.parquet(os.path.join(datamart_dir, f"demographic.parquet"), mode="overwrite")
+-- MAGIC spark.table("AvedaFirstLastPurchase").write.parquet(os.path.join(datamart_dir, f"first_last_transaction.parquet"), mode="overwrite")
