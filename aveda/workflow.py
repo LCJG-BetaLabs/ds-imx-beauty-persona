@@ -13,7 +13,7 @@ start_date, end_date
 
 # COMMAND ----------
 
-base_dir_no_dbfs = f"/mnt/prd/customer_segmentation/imx/aveda/{end_date.year}_testing/Q{quarter_no}"
+base_dir_no_dbfs = f"/mnt/prd/customer_segmentation/imx/aveda/{end_date.year}/Q{quarter_no}"
 base_dir = "/dbfs" + base_dir_no_dbfs
 start_date = start_date.strftime("%Y-%m-%d")
 end_date = end_date.strftime("%Y-%m-%d")
@@ -38,7 +38,7 @@ jobs = [
             },
     },
     {
-        "notebook_path": "../aveda/clustering",
+        "notebook_path": "../aveda/predict",
         "arguments": {
             "base_dir": base_dir_no_dbfs,
             "start_date": start_date,
@@ -46,7 +46,7 @@ jobs = [
             },
     },
     {
-        "notebook_path": "../aveda/profiling/profile_and_export",
+        "notebook_path": "../aveda/profile_and_export",
         "arguments": {
             "base_dir": base_dir_no_dbfs,
             "start_date": start_date,

@@ -26,7 +26,6 @@ model_dir = os.path.join(dbutils.widgets.get("base_dir"), "model")
 persona = spark.read.parquet(os.path.join(model_dir, "clustering_result.parquet"))
 persona.createOrReplaceTempView("persona0")
 
-
 # COMMAND ----------
 
 # MAGIC %md
@@ -57,6 +56,52 @@ persona.createOrReplaceTempView("persona0")
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC CREATE OR REPLACE TEMP VIEW imx_vip AS
+# MAGIC SELECT 
+# MAGIC DISTINCT vip_main_no,
+# MAGIC vip_opt_in,
+# MAGIC vip_no_sms,
+# MAGIC vip_no_phone,
+# MAGIC vip_no_edm
+# MAGIC FROM imx_prd.imx_dw_train_silver.dbo_viw_lc_sales_vip v1
+# MAGIC WHERE vip_brand_code = 'BA'
+# MAGIC   AND vip_last_modified_date = (
+# MAGIC     SELECT MAX(vip_last_modified_date)
+# MAGIC     FROM imx_prd.imx_dw_train_silver.dbo_viw_lc_sales_vip v2
+# MAGIC     WHERE v2.vip_main_no = v1.vip_main_no
+# MAGIC       AND v2.vip_brand_code = 'BA'
+# MAGIC       AND v2.region_key = 'HK'
+# MAGIC   );
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE OR REPLACE TEMP VIEW vip_list AS
+# MAGIC SELECT 
+# MAGIC   current_date() as date_of_run,
+# MAGIC   a.vip_main_no,
+# MAGIC   persona,
+# MAGIC   vip_opt_in,
+# MAGIC   vip_no_sms,
+# MAGIC   vip_no_phone,
+# MAGIC   vip_no_edm
+# MAGIC FROM persona a
+# MAGIC LEFT JOIN imx_vip b
+# MAGIC   ON a.vip_main_no = b.vip_main_no
+
+# COMMAND ----------
+
+vip_list_df = spark.sql("SELECT * FROM vip_list").toPandas()
+
+# COMMAND ----------
+
+output_dir = os.path.join("/dbfs" + dbutils.widgets.get("base_dir"), "output")
+os.makedirs(output_dir, exist_ok=True)
+vip_list_df.to_csv(os.path.join(output_dir, "aveda_customer_list.csv"), index=False)
+
+# COMMAND ----------
+
 cluster_order = ["Haircare Enthusiasts", "Tress Treatment Devotees", "Shampoo Connoisseurs", "Beauty Style Seekers", "Skincare Enthusiasts"]
 
 # COMMAND ----------
@@ -81,12 +126,6 @@ SELECT
   SUM(CASE WHEN persona IS NULL THEN count END) AS Total
 FROM persona_counts
 """).toPandas()
-
-# COMMAND ----------
-
-output_dir = os.path.join("/dbfs" + dbutils.widgets.get("base_dir"), "output")
-os.makedirs(output_dir, exist_ok=True)
-persona_df.to_csv(os.path.join(output_dir, "persona.csv"), index=False)
 
 # COMMAND ----------
 
@@ -244,7 +283,6 @@ amt_df.display()
 import datetime
 
 current_date = datetime.date.today()    
-
 start_date = dbutils.widgets.get("start_date")
 end_date = dbutils.widgets.get("end_date")
 quarter_no = spark.sql(f"SELECT quarter('{end_date}')").collect()[0][0]
@@ -284,10 +322,11 @@ tracker_email_body = (
     + "<br><br><b>Persona SOW by subcat:</b><br><br>"
     + subcat_df.to_html(index=False)
 )
-tracker_email_subject = f"Aveda Persona - SOW in {quarter_year} Q{quarter_no}"
+tracker_email_subject = f"Persona of Aveda - SOW in {quarter_year} Q{quarter_no}"
 send_email(
     ["seanchan@lanecrawford.com", "arnabmaulik@lcjgroup.com"],
     tracker_email_subject,
     tracker_email_body,
+    attachments=[os.path.join(output_dir, "aveda_customer_list.csv")],
     scope='ds-secret'
 )

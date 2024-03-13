@@ -44,28 +44,10 @@ for path in files:
 
 # COMMAND ----------
 
-# remove features with 85% zero
 features_df = features_df.fillna(0)
-zero_percentage_threshold = 1
-
-zero_features = []
-
-total_rows = features_df.count()
-for column_name in features_df.columns:
-    zero_count = features_df.filter(f.col(column_name) == 0).count()
-    zero_percentage = zero_count / total_rows
-
-    if zero_percentage >= zero_percentage_threshold:
-        zero_features.append(column_name)
-
-zero_features.append('Color_SOW_by_prodline')
-print(zero_features, len(zero_features))
-
-# COMMAND ----------
-
 # manual select feature
 features_to_keep = [col for col in features_df.columns if
-                    col not in zero_features]
+                    col not in ['Color_SOW_by_prodline']]
 features_df_filtered = features_df.select(features_to_keep)
 
 #remove outlier
@@ -91,29 +73,29 @@ standardized_df = np.nan_to_num(standardized_df)
 
 # COMMAND ----------
 
-# FactorAnalysis
-n_components = 10
-
-fa = FactorAnalysis(n_components=n_components)
-fa.fit(standardized_df)
-
-factor_loadings = fa.components_
-selected_features = np.abs(factor_loadings).sum(axis=0).argsort()[:n_components]
+selected_features = [1, 0, 2, 3, 8, 4, 7, 5, 6]
 
 # COMMAND ----------
 
-np.array(feature_cols)[np.array(selected_features)]
+# MAGIC %md
+# MAGIC selected feature:
+# MAGIC ```python
+# MAGIC array(['Body_SOW_by_maincat', 'Skin_SOW_by_maincat',
+# MAGIC        'Botanical Repair_SOW_by_prodline', 'Invati_SOW_by_prodline',
+# MAGIC        'Treatment_SOW_by_subcat', 'Others_SOW_by_prodline',
+# MAGIC        'Style_SOW_by_subcat', 'Conditioner_SOW_by_subcat',
+# MAGIC        'Shampoo_SOW_by_subcat'], dtype='<U32')
+# MAGIC ```
 
 # COMMAND ----------
 
-factor_table = pd.DataFrame(factor_loadings.T, index=np.array(feature_cols))
 features_embed = standardized_df[:, selected_features]
 
 # COMMAND ----------
 
 import joblib
 from sklearn.cluster import KMeans
-kmeans = joblib.load("/dbfs/mnt/dev/customer_segmentation/imx/aveda/2023/model/kmeans_model6.pkl")
+kmeans = joblib.load("/dbfs/mnt/prd/customer_segmentation/imx/aveda/train/model/kmeans_model6.pkl")
 cluster_assignment = kmeans.predict(features_embed)
 
 # COMMAND ----------
