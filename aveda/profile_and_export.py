@@ -59,20 +59,21 @@ persona.createOrReplaceTempView("persona0")
 # MAGIC %sql
 # MAGIC CREATE OR REPLACE TEMP VIEW imx_vip AS
 # MAGIC SELECT 
-# MAGIC DISTINCT vip_main_no,
+# MAGIC DISTINCT 
+# MAGIC vip_main_no,
 # MAGIC vip_opt_in,
 # MAGIC vip_no_sms,
 # MAGIC vip_no_phone,
 # MAGIC vip_no_edm
-# MAGIC FROM imx_prd.imx_dw_train_silver.dbo_viw_lc_sales_vip v1
-# MAGIC WHERE vip_brand_code = 'BA'
-# MAGIC   AND vip_last_modified_date = (
-# MAGIC     SELECT MAX(vip_last_modified_date)
-# MAGIC     FROM imx_prd.imx_dw_train_silver.dbo_viw_lc_sales_vip v2
-# MAGIC     WHERE v2.vip_main_no = v1.vip_main_no
-# MAGIC       AND v2.vip_brand_code = 'BA'
-# MAGIC       AND v2.region_key = 'HK'
-# MAGIC   );
+# MAGIC FROM (
+# MAGIC   SELECT *,
+# MAGIC     ROW_NUMBER() OVER (PARTITION BY vip_main_no ORDER BY vip_last_modified_date DESC NULLS FIRST, vip_type_start_date DESC, 
+# MAGIC     vip_card_issue_date DESC) AS rn
+# MAGIC   FROM imx_prd.imx_dw_train_silver.dbo_viw_lc_sales_vip v1
+# MAGIC   WHERE vip_brand_code = 'BA'
+# MAGIC     AND region_key = 'HK'
+# MAGIC ) AS subquery
+# MAGIC WHERE rn = 1;
 
 # COMMAND ----------
 
