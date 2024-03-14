@@ -10,7 +10,7 @@ import os
 import pandas as pd
 import pyspark.sql.functions as f
 
-base_dir = dbutils.widgets.get("base_dir") + "/datamart"
+base_dir = os.path.join(dbutils.widgets.get("base_dir"), "datamart")
 
 sales = spark.read.parquet(os.path.join(base_dir, "transaction.parquet"))
 vip = spark.read.parquet(os.path.join(base_dir, "demographic.parquet"))
@@ -18,7 +18,7 @@ first_purchase = spark.read.parquet(os.path.join(base_dir, "first_last_transacti
 
 # COMMAND ----------
 
-feature_dir = dbutils.widgets.get("base_dir") + "/features"
+feature_dir = os.path.join(dbutils.widgets.get("base_dir"), "features")
 os.makedirs(feature_dir, exist_ok=True)
 
 # COMMAND ----------
